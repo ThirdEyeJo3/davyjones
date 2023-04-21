@@ -1,0 +1,81 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+contract SelfFundingERC20 {
+    string public name;
+    string public symbol;
+    uint8 public decimals;
+    uint256 public totalSupply;
+    uint256 public fundAmount;
+    uint256 public fundThreshold;
+    uint256 public fundStartTime;
+    address public fundAddress;
+    mapping(address => uint256) public balanceOf;
+    mapping(address => mapping(address => uint256)) public allowance;
+
+    event Transfer(address indexed from, address indexed to, uint256 value);
+    event Approval(address indexed owner, address indexed spender, uint256 value);
+    event Fund(address indexed from, uint256 value);
+
+    constructor(
+        string memory _name,
+        string memory _symbol,
+        uint8 _decimals,
+        uint256 _totalSupply,
+        uint256 _fundAmount,
+        uint256 _fundThreshold,
+        uint256 _fundStartTime,
+        address _fundAddress
+    ) {
+        name = _name;
+        symbol = _symbol;
+        decimals = _decimals;
+        totalSupply = _totalSupply;
+        fundAmount = _fundAmount;
+        fundThreshold = _fundThreshold;
+        fundStartTime = _fundStartTime;
+        fundAddress = _fundAddress;
+        balanceOf[_fundAddress] = _totalSupply;
+        emit Transfer(address(0), _fundAddress, _totalSupply);
+    }
+
+    function transfer(address to, uint256 value) public returns (bool success) {
+        require(balanceOf[msg.sender] >= value, "Insufficient balance");
+        balanceOf[msg.sender] -= value;
+        balanceOf[to] += value;
+        emit Transfer(msg.sender, to, value);
+        return true;
+    }
+
+    function approve(address spender, uint256 value) public returns (bool success) {
+        allowance[msg.sender][spender] = value;
+        emit Approval(msg.sender, spender, value);
+        return true;
+    }
+
+    function transferFrom(address from, address to, uint256 value) public returns (bool success) {
+        require(balanceOf[from] >= value, "Insufficient balance");
+        require(allowance[from][msg.sender] >= value, "Insufficient allowance");
+        balanceOf[from] -= value;
+        balanceOf[to] += value;
+        allowance[from][msg.sender] -= value;
+        emit Transfer(from, to, value);
+        return true;
+    }
+
+    function fund() public payable {
+        require(msg.sender == fundAddress, "Unauthorized");
+        require(block.timestamp >= fundStartTime, "Funding has not started yet");
+        require(address(this).balance <= fundThreshold, "Fund threshold exceeded");
+        require(msg.value == fundAmount, "Invalid fund amount");
+        emit Fund(msg.sender, msg.value);
+    }
+
+    function withdraw() public {
+        require(msg.sender == fundAddress, "Unauthorized");
+        require(address(this).balance > 0, "No balance to withdraw");
+        payable(fundAddress).transfer(address(this).balance);
+    }
+
+    receive() external payable {}
+}
